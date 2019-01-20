@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use {
+use crate::{
     error::{Error, ResultExt},
     Asset, SimpleFormat,
 };

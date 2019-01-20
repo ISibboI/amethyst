@@ -1,19 +1,22 @@
 use std::{borrow::Borrow, hash::Hash, path::PathBuf, sync::Arc};
 
 use fnv::FnvHashMap;
+use log::debug;
 use rayon::ThreadPool;
 
-use {
+#[cfg(feature = "profiler")]
+use thread_profiler::profile_scope;
+
+use crate::{
     storage::{AssetStorage, Handle, Processed},
     Asset, Directory, ErrorKind, Format, FormatValue, Progress, ResultExt, Source,
 };
 
 /// The asset loader, holding the sources and a reference to the `ThreadPool`.
 pub struct Loader {
-    directory: Arc<Directory>,
     hot_reload: bool,
     pool: Arc<ThreadPool>,
-    sources: FnvHashMap<String, Arc<Source>>,
+    sources: FnvHashMap<String, Arc<dyn Source>>,
 }
 
 impl Loader {
@@ -23,12 +26,22 @@ impl Loader {
     where
         P: Into<PathBuf>,
     {
-        Loader {
-            directory: Arc::new(Directory::new(directory)),
+        Self::with_default_source(Directory::new(directory), pool)
+    }
+
+    /// Creates a new asset loader, using the provided source
+    pub fn with_default_source<S>(source: S, pool: Arc<ThreadPool>) -> Self
+    where
+        S: Source,
+    {
+        let mut loader = Loader {
             hot_reload: true,
             pool,
             sources: Default::default(),
-        }
+        };
+
+        loader.set_default_source(source);
+        loader
     }
 
     /// Add a source to the `Loader`, given an id and the source.
@@ -38,7 +51,15 @@ impl Loader {
         S: Source,
     {
         self.sources
-            .insert(id.into(), Arc::new(source) as Arc<Source>);
+            .insert(id.into(), Arc::new(source) as Arc<dyn Source>);
+    }
+
+    /// Set the default source of the `Loader`.
+    pub fn set_default_source<S>(&mut self, source: S)
+    where
+        S: Source,
+    {
+        self.add_source(String::new(), source);
     }
 
     /// If set to `true`, this `Loader` will ask formats to
@@ -107,7 +128,7 @@ impl Loader {
     {
         #[cfg(feature = "profiler")]
         profile_scope!("load_asset_from");
-        use progress::Tracker;
+        use crate::progress::Tracker;
 
         let name = name.into();
         let source = source.as_ref();
@@ -129,14 +150,10 @@ impl Loader {
             handle,
         );
 
-        let source = match source {
-            "" => self.directory.clone(),
-            source => self.source(source),
-        };
-
         progress.add_assets(1);
         let tracker = progress.create_tracker();
 
+        let source = self.source(source);
         let handle_clone = handle.clone();
         let processed = storage.processed.clone();
 
@@ -148,7 +165,7 @@ impl Loader {
             let data = format
                 .import(name.clone(), source, options, hot_reload)
                 .chain_err(|| ErrorKind::Format(F::NAME));
-            let tracker = Box::new(tracker) as Box<Tracker>;
+            let tracker = Box::new(tracker) as Box<dyn Tracker>;
 
             processed.push(Processed::NewAsset {
                 data,
@@ -187,7 +204,7 @@ impl Loader {
         handle
     }
 
-    fn source(&self, source: &str) -> Arc<Source> {
+    fn source(&self, source: &str) -> Arc<dyn Source> {
         self.sources
             .get(source)
             .expect("No such source. Maybe you forgot to add it with `Loader::add_source`?")

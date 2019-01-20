@@ -3,9 +3,10 @@ use std::sync::{
     Arc,
 };
 
+use log::error;
 use parking_lot::Mutex;
 
-use Error;
+use crate::Error;
 
 /// Completion status, returned by `ProgressCounter::complete`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

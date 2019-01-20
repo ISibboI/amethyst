@@ -1,4 +1,6 @@
+use derivative::Derivative;
 use serde::de::DeserializeOwned;
+use shred_derive::SystemData;
 use std::marker::PhantomData;
 
 use amethyst_assets::{
@@ -8,37 +10,43 @@ use amethyst_assets::{
 use amethyst_audio::{AudioFormat, Source as Audio};
 use amethyst_core::specs::{
     error::BoxedErr,
-    prelude::{Entities, Entity, Read, ReadExpect, Write, WriteStorage},
+    prelude::{Entities, Entity, Read, ReadExpect, WriteStorage},
 };
-use amethyst_renderer::{HiddenPropagate, Texture, TextureFormat, TextureMetadata, TexturePrefab};
+use amethyst_renderer::{
+    HiddenPropagate, Texture, TextureFormat, TextureHandle, TextureMetadata, TexturePrefab,
+};
 
-use super::*;
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    get_default_font, Anchor, FontAsset, FontFormat, Interactable, LineMode, Selectable, Stretch,
+    TextEditing, UiButton, UiButtonAction, UiButtonActionRetrigger, UiButtonActionType,
+    UiPlaySoundAction, UiSoundRetrigger, UiText, UiTransform,
+};
 
 /// Loadable `UiTransform` data.
 /// By default z is equal to one.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Derivative)]
 #[serde(default)]
-pub struct UiTransformBuilder {
+#[derivative(Default)]
+pub struct UiTransformBuilder<G> {
     /// An identifier. Serves no purpose other than to help you distinguish between UI elements.
     pub id: String,
     /// X coordinate
     pub x: f32,
     /// Y coordinate
     pub y: f32,
+    #[derivative(Default(value = "1.0"))]
     /// Z coordinate, defaults to one.
     pub z: f32,
     /// The width of this UI element.
     pub width: f32,
     /// The height of this UI element.
     pub height: f32,
-    /// The UI element tab order.  When the player presses tab the UI focus will shift to the
-    /// UI element with the next highest tab order, or if another element with the same tab_order
-    /// as this one exists they are ordered according to Entity creation order.  Shift-tab walks
-    /// this ordering backwards.
-    pub tab_order: i32,
     /// Indicates if actions on the ui can go through this element.
     /// If set to false, the element will behaves as if it was transparent and will let events go to
     /// the next element (for example, the text on a button).
+    #[derivative(Default(value = "true"))]
     pub opaque: bool,
     /// Renders this UI element by evaluating transform as a percentage of the parent size,
     /// rather than rendering it with pixel units.
@@ -46,34 +54,25 @@ pub struct UiTransformBuilder {
     /// If a child ui element needs to fill its parent this can be used to stretch it to the appropriate size.
     pub stretch: Option<Stretch>,
     /// Indicates where the element sits, relative to the parent (or to the screen, if there is no parent)
+    #[derivative(Default(value = "Anchor::Middle"))]
     pub anchor: Anchor,
     /// Allow mouse events on this UI element.
     pub mouse_reactive: bool,
     /// Hides an entity by adding a [`HiddenPropagate`](../amethyst_renderer/struct.HiddenPropagate.html) component
     pub hidden: bool,
+    /// Makes the UiTransform selectable through keyboard inputs, mouse inputs and other means.
+    /// # Ordering
+    /// The UI element tab order.  When the player presses tab the UI focus will shift to the
+    /// UI element with the next highest tab order, or if another element with the same tab_order
+    /// as this one exists they are ordered according to Entity creation order.  Shift-tab walks
+    /// this ordering backwards.
+    // TODO: Make full prefab for Selectable.
+    pub selectable: Option<u32>,
+    #[serde(skip)]
+    _phantom: PhantomData<G>,
 }
 
-impl Default for UiTransformBuilder {
-    fn default() -> Self {
-        UiTransformBuilder {
-            id: "".to_string(),
-            x: 0.,
-            y: 0.,
-            z: 1.,
-            width: 0.,
-            height: 0.,
-            tab_order: 0,
-            opaque: true,
-            percent: false,
-            stretch: None,
-            anchor: Anchor::Middle,
-            mouse_reactive: false,
-            hidden: false,
-        }
-    }
-}
-
-impl UiTransformBuilder {
+impl<G> UiTransformBuilder<G> {
     /// Set id
     pub fn with_id<S>(mut self, id: S) -> Self
     where
@@ -95,12 +94,6 @@ impl UiTransformBuilder {
     pub fn with_size(mut self, width: f32, height: f32) -> Self {
         self.width = width;
         self.height = height;
-        self
-    }
-
-    /// Set tab order
-    pub fn with_tab_order(mut self, tab_order: i32) -> Self {
-        self.tab_order = tab_order;
         self
     }
 
@@ -135,11 +128,15 @@ impl UiTransformBuilder {
     }
 }
 
-impl<'a> PrefabData<'a> for UiTransformBuilder {
+impl<'a, G> PrefabData<'a> for UiTransformBuilder<G>
+where
+    G: Send + Sync + 'static,
+{
     type SystemData = (
         WriteStorage<'a, UiTransform>,
-        WriteStorage<'a, MouseReactive>,
+        WriteStorage<'a, Interactable>,
         WriteStorage<'a, HiddenPropagate>,
+        WriteStorage<'a, Selectable<G>>,
     );
     type Result = ();
 
@@ -157,7 +154,6 @@ impl<'a> PrefabData<'a> for UiTransformBuilder {
             self.z,
             self.width,
             self.height,
-            self.tab_order,
         );
         if let Some(ref stretch) = self.stretch {
             transform = transform.with_stretch(stretch.clone());
@@ -170,11 +166,15 @@ impl<'a> PrefabData<'a> for UiTransformBuilder {
         }
         system_data.0.insert(entity, transform)?;
         if self.mouse_reactive {
-            system_data.1.insert(entity, MouseReactive)?;
+            system_data.1.insert(entity, Interactable)?;
         }
 
         if self.hidden {
             system_data.2.insert(entity, HiddenPropagate)?;
+        }
+
+        if let Some(u) = self.selectable {
+            system_data.3.insert(entity, Selectable::<G>::new(u))?;
         }
 
         Ok(())
@@ -186,6 +186,7 @@ impl<'a> PrefabData<'a> for UiTransformBuilder {
 /// ### Type parameters:
 ///
 /// - `F`: `Format` used for loading `FontAsset`
+/// - `G`: Selection Group Type
 #[derive(Deserialize, Serialize, Clone)]
 pub struct UiTextBuilder<F = FontFormat>
 where
@@ -223,8 +224,6 @@ pub struct TextEditingPrefab {
     pub selected_background_color: [f32; 4],
     /// Use block cursor instead of line cursor
     pub use_block_cursor: bool,
-    /// Set this text field as focused
-    pub focused: bool,
 }
 
 impl Default for TextEditingPrefab {
@@ -234,7 +233,6 @@ impl Default for TextEditingPrefab {
             selected_text_color: [0., 0., 0., 1.],
             selected_background_color: [1., 1., 1., 1.],
             use_block_cursor: false,
-            focused: false,
         }
     }
 }
@@ -247,7 +245,6 @@ where
         WriteStorage<'a, UiText>,
         WriteStorage<'a, TextEditing>,
         <AssetPrefab<FontAsset, F> as PrefabData<'a>>::SystemData,
-        Write<'a, UiFocused>,
     );
     type Result = ();
 
@@ -257,7 +254,7 @@ where
         system_data: &mut Self::SystemData,
         _: &[Entity],
     ) -> Result<(), PrefabError> {
-        let (ref mut texts, ref mut editables, ref mut fonts, ref mut focused) = system_data;
+        let (ref mut texts, ref mut editables, ref mut fonts) = system_data;
         let font_handle = self
             .font
             .as_ref()
@@ -285,9 +282,6 @@ where
                     editing.use_block_cursor,
                 ),
             )?;
-            if editing.focused {
-                focused.entity = Some(entity);
-            }
         }
         Ok(())
     }
@@ -297,13 +291,14 @@ where
         progress: &mut ProgressCounter,
         system_data: &mut Self::SystemData,
     ) -> Result<bool, PrefabError> {
-        let (_, _, ref mut fonts, _) = system_data;
+        let (_, _, ref mut fonts) = system_data;
 
         self.font
             .get_or_insert_with(|| {
                 let (ref loader, _, ref storage) = fonts;
                 AssetPrefab::Handle(get_default_font(loader, storage))
-            }).load_sub_assets(progress, fonts)
+            })
+            .load_sub_assets(progress, fonts)
     }
 }
 
@@ -313,7 +308,7 @@ where
 ///
 /// - `F`: `Format` used for loading `Texture`s
 #[derive(Clone, Deserialize, Serialize)]
-pub struct UiImageBuilder<F = TextureFormat>
+pub struct UiImagePrefab<F = TextureFormat>
 where
     F: Format<Texture, Options = TextureMetadata>,
 {
@@ -321,12 +316,12 @@ where
     pub image: TexturePrefab<F>,
 }
 
-impl<'a, F> PrefabData<'a> for UiImageBuilder<F>
+impl<'a, F> PrefabData<'a> for UiImagePrefab<F>
 where
     F: Format<Texture, Options = TextureMetadata> + Clone + Sync,
 {
     type SystemData = (
-        WriteStorage<'a, UiImage>,
+        WriteStorage<'a, TextureHandle>,
         <TexturePrefab<F> as PrefabData<'a>>::SystemData,
     );
     type Result = ();
@@ -339,12 +334,7 @@ where
     ) -> Result<(), PrefabError> {
         let (ref mut images, ref mut textures) = system_data;
         let texture_handle = self.image.add_to_entity(entity, textures, entities)?;
-        images.insert(
-            entity,
-            UiImage {
-                texture: texture_handle,
-            },
-        )?;
+        images.insert(entity, texture_handle)?;
         Ok(())
     }
 
@@ -364,6 +354,7 @@ where
 ///
 /// - `TF`: `Format` used for loading `Texture`s
 /// - `AF`: `Format` used for loading sounds
+/// - `FF`: `Format` used for loading fonts
 #[derive(Deserialize, Serialize, Clone)]
 pub struct UiButtonBuilder<AF = AudioFormat, TF = TextureFormat, FF = FontFormat>
 where
@@ -405,8 +396,8 @@ where
 {
     type SystemData = (
         WriteStorage<'a, UiButton>,
-        WriteStorage<'a, OnUiActionImage>,
-        WriteStorage<'a, OnUiActionSound>,
+        WriteStorage<'a, UiSoundRetrigger>,
+        WriteStorage<'a, UiButtonActionRetrigger>,
         <TexturePrefab<TF> as PrefabData<'a>>::SystemData,
         <AssetPrefab<Audio, AF> as PrefabData<'a>>::SystemData,
     );
@@ -420,12 +411,13 @@ where
     ) -> Result<(), PrefabError> {
         let (
             ref mut buttons,
-            ref mut action_image,
-            ref mut action_sound,
+            ref mut sound_retrigger,
+            ref mut button_action_retrigger,
             ref mut textures,
             ref mut sounds,
         ) = system_data;
-        let normal_image = self
+
+        let _normal_image = self
             .normal_image
             .add_to_entity(entity, textures, entity_set)?;
         let hover_image = self
@@ -434,31 +426,94 @@ where
         let press_image = self
             .press_image
             .add_to_entity(entity, textures, entity_set)?;
+
         let hover_sound = self.hover_sound.add_to_entity(entity, sounds, entity_set)?;
         let press_sound = self.press_sound.add_to_entity(entity, sounds, entity_set)?;
         let release_sound = self
             .release_sound
             .add_to_entity(entity, sounds, entity_set)?;
-        buttons.insert(
-            entity,
-            UiButton::new(
-                self.normal_text_color,
-                self.hover_text_color,
-                self.press_text_color,
-            ),
-        )?;
-        if hover_image.is_some() || press_image.is_some() {
-            action_image.insert(
-                entity,
-                OnUiActionImage::new(normal_image, hover_image, press_image),
-            )?;
+
+        buttons.insert(entity, UiButton::new(self.normal_text_color))?;
+
+        let mut on_click_start = Vec::new();
+        let mut on_click_stop = Vec::new();
+        let mut on_hover_start = Vec::new();
+        let mut on_hover_stop = Vec::new();
+
+        if let Some(press_image) = press_image {
+            on_click_start.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::SetTexture(press_image.clone()),
+            });
+
+            on_click_stop.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::UnsetTexture(press_image.clone()),
+            });
         }
+
+        if let Some(hover_image) = hover_image {
+            on_hover_start.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::SetTexture(hover_image.clone()),
+            });
+
+            on_hover_stop.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::UnsetTexture(hover_image.clone()),
+            });
+        }
+
+        if let Some(press_text_color) = self.press_text_color {
+            on_click_start.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::SetTextColor(press_text_color),
+            });
+
+            on_click_stop.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::UnsetTextColor(press_text_color),
+            });
+        }
+
+        if let Some(hover_text_color) = self.hover_text_color {
+            on_hover_start.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::SetTextColor(hover_text_color),
+            });
+
+            on_hover_stop.push(UiButtonAction {
+                target: entity.clone(),
+                event_type: UiButtonActionType::UnsetTextColor(hover_text_color),
+            });
+        }
+
+        if !on_click_start.is_empty()
+            || !on_click_stop.is_empty()
+            || !on_hover_start.is_empty()
+            || !on_hover_stop.is_empty()
+        {
+            let retrigger = UiButtonActionRetrigger {
+                on_click_start,
+                on_click_stop,
+                on_hover_start,
+                on_hover_stop,
+            };
+
+            button_action_retrigger.insert(entity, retrigger)?;
+        }
+
         if hover_sound.is_some() || press_sound.is_some() || release_sound.is_some() {
-            action_sound.insert(
-                entity,
-                OnUiActionSound::new(hover_sound, press_sound, release_sound),
-            )?;
+            let retrigger = UiSoundRetrigger {
+                on_click_start: press_sound.map(|it| UiPlaySoundAction(it)),
+                on_click_stop: release_sound.map(|it| UiPlaySoundAction(it)),
+                on_hover_start: hover_sound.map(|it| UiPlaySoundAction(it)),
+                on_hover_stop: None,
+            };
+
+            sound_retrigger.insert(entity, retrigger)?;
         }
+
         Ok(())
     }
 
@@ -485,7 +540,7 @@ where
 /// - `I`: `Format` used for loading `Texture`s
 /// - `F`: `Format` used for loading `FontAsset`
 #[derive(Serialize, Deserialize, Clone)]
-pub enum UiWidget<A = AudioFormat, I = TextureFormat, F = FontFormat, C = NoCustomUi>
+pub enum UiWidget<A = AudioFormat, I = TextureFormat, F = FontFormat, C = NoCustomUi, G = ()>
 where
     A: Format<Audio, Options = ()>,
     I: Format<Texture, Options = TextureMetadata>,
@@ -495,31 +550,31 @@ where
     /// Container component
     Container {
         /// Spatial information for the container
-        transform: UiTransformBuilder,
+        transform: UiTransformBuilder<G>,
         /// Background image
         #[serde(default = "default_container_image")]
-        background: Option<UiImageBuilder<I>>,
+        background: Option<UiImagePrefab<I>>,
         /// Child widgets
         children: Vec<UiWidget<A, I, F, C>>,
     },
     /// Image component
     Image {
         /// Spatial information
-        transform: UiTransformBuilder,
+        transform: UiTransformBuilder<G>,
         /// Image
-        image: UiImageBuilder<I>,
+        image: UiImagePrefab<I>,
     },
     /// Text component
     Text {
         /// Spatial information
-        transform: UiTransformBuilder,
+        transform: UiTransformBuilder<G>,
         /// Text
         text: UiTextBuilder<F>,
     },
     /// Button component
     Button {
         /// Spatial information
-        transform: UiTransformBuilder,
+        transform: UiTransformBuilder<G>,
         /// Button
         button: UiButtonBuilder<A, I, F>,
     },
@@ -527,7 +582,7 @@ where
     Custom(Box<C>),
 }
 
-impl<A, I, F, C> UiWidget<A, I, F, C>
+impl<A, I, F, C, G> UiWidget<A, I, F, C, G>
 where
     A: Format<Audio, Options = ()>,
     I: Format<Texture, Options = TextureMetadata>,
@@ -535,7 +590,7 @@ where
     C: ToNativeWidget<A, I, F>,
 {
     /// Convenience function to access widgets `UiTransformBuilder`
-    pub fn transform(&self) -> Option<&UiTransformBuilder> {
+    pub fn transform(&self) -> Option<&UiTransformBuilder<G>> {
         match self {
             UiWidget::Container { ref transform, .. } => Some(transform),
             UiWidget::Image { ref transform, .. } => Some(transform),
@@ -546,7 +601,7 @@ where
     }
 
     /// Convenience function to access widgets `UiTransformBuilder`
-    pub fn transform_mut(&mut self) -> Option<&mut UiTransformBuilder> {
+    pub fn transform_mut(&mut self) -> Option<&mut UiTransformBuilder<G>> {
         match self {
             UiWidget::Container {
                 ref mut transform, ..
@@ -564,8 +619,8 @@ where
         }
     }
 
-    /// Convenience function to access widgets `UiImageBuilder`
-    pub fn image(&self) -> Option<&UiImageBuilder<I>> {
+    /// Convenience function to access widgets `UiImagePrefab`
+    pub fn image(&self) -> Option<&UiImagePrefab<I>> {
         match self {
             UiWidget::Container { ref background, .. } => background.as_ref(),
             UiWidget::Image { ref image, .. } => Some(image),
@@ -573,8 +628,8 @@ where
         }
     }
 
-    /// Convenience function to access widgets `UiImageBuilder`
-    pub fn image_mut(&mut self) -> Option<&mut UiImageBuilder<I>> {
+    /// Convenience function to access widgets `UiImagePrefab`
+    pub fn image_mut(&mut self) -> Option<&mut UiImagePrefab<I>> {
         match self {
             UiWidget::Container {
                 ref mut background, ..
@@ -625,7 +680,7 @@ where
     }
 }
 
-fn default_container_image<I>() -> Option<UiImageBuilder<I>>
+fn default_container_image<I>() -> Option<UiImagePrefab<I>>
 where
     I: Format<Texture, Options = TextureMetadata>,
 {
@@ -637,9 +692,10 @@ type UiPrefabData<
     I = TextureFormat,
     F = FontFormat,
     D = <NoCustomUi as ToNativeWidget>::PrefabData,
+    G = (),
 > = (
-    Option<UiTransformBuilder>,
-    Option<UiImageBuilder<I>>,
+    Option<UiTransformBuilder<G>>,
+    Option<UiImagePrefab<I>>,
     Option<UiTextBuilder<F>>,
     Option<UiButtonBuilder<A, I, F>>,
     D,
@@ -711,23 +767,17 @@ fn walk_ui_tree<A, I, F, C>(
         }
 
         UiWidget::Image { transform, image } => {
-            prefab.entity(current_index).unwrap().set_data((
-                Some(transform),
-                Some(image),
-                None,
-                None,
-                custom_data,
-            ));
+            prefab
+                .entity(current_index)
+                .expect("Unreachable: `Prefab` entity should always be set when walking ui tree")
+                .set_data((Some(transform), Some(image), None, None, custom_data));
         }
 
         UiWidget::Text { transform, text } => {
-            prefab.entity(current_index).unwrap().set_data((
-                Some(transform),
-                None,
-                Some(text),
-                None,
-                custom_data,
-            ));
+            prefab
+                .entity(current_index)
+                .expect("Unreachable: `Prefab` entity should always be set when walking ui tree")
+                .set_data((Some(transform), None, Some(text), None, custom_data));
         }
 
         UiWidget::Container {
@@ -735,13 +785,11 @@ fn walk_ui_tree<A, I, F, C>(
             background,
             children,
         } => {
-            prefab.entity(current_index).unwrap().set_data((
-                Some(transform),
-                background,
-                None,
-                None,
-                custom_data,
-            ));
+            prefab
+                .entity(current_index)
+                .expect("Unreachable: `Prefab` entity should always be set when walking ui tree")
+                .set_data((Some(transform), background, None, None, custom_data));
+
             for child_widget in children {
                 let child_index = prefab.add(Some(current_index), None);
                 walk_ui_tree(child_widget, child_index, prefab, Default::default());
@@ -749,7 +797,7 @@ fn walk_ui_tree<A, I, F, C>(
         }
 
         UiWidget::Button { transform, button } => {
-            let mut id = transform.id.clone();
+            let id = transform.id.clone();
             let text = UiTextBuilder {
                 color: button.normal_text_color,
                 editable: None,
@@ -760,15 +808,20 @@ fn walk_ui_tree<A, I, F, C>(
                 text: button.text.clone(),
                 font_size: button.font_size,
             };
-            prefab.entity(current_index).unwrap().set_data((
-                Some(transform),
-                button.normal_image.as_ref().map(|image| UiImageBuilder {
-                    image: image.clone(),
-                }),
-                None,
-                Some(button),
-                custom_data,
-            ));
+
+            prefab
+                .entity(current_index)
+                .expect("Unreachable: `Prefab` entity should always be set when walking ui tree")
+                .set_data((
+                    Some(transform),
+                    button.normal_image.as_ref().map(|image| UiImagePrefab {
+                        image: image.clone(),
+                    }),
+                    None,
+                    Some(button),
+                    custom_data,
+                ));
+
             prefab.add(
                 Some(current_index),
                 Some((
@@ -887,7 +940,9 @@ where
     {
         let entity = self.entities.create();
         let handle = self.loader.load(name, progress);
-        self.handles.insert(entity, handle).unwrap(); // safe because we just created the entity
+        self.handles
+            .insert(entity, handle)
+            .expect("Unreachable: We just created the entity");
         entity
     }
 }
@@ -902,15 +957,15 @@ where
 /// - `CD`: prefab data from custom UI, see `ToNativeWidget::PrefabData`
 pub type UiLoaderSystem<A, I, F, CD> = PrefabLoaderSystem<UiPrefabData<A, I, F, CD>>;
 
-fn button_text_transform(mut id: String) -> UiTransformBuilder {
+fn button_text_transform<G>(mut id: String) -> UiTransformBuilder<G> {
     id.push_str("_btn_txt");
     UiTransformBuilder::default()
         .with_id(id)
         .with_position(0., 0., 1.)
-        .with_tab_order(10)
         .with_anchor(Anchor::Middle)
         .with_stretch(Stretch::XY {
             x_margin: 0.,
             y_margin: 0.,
-        }).transparent()
+        })
+        .transparent()
 }

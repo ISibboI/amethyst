@@ -1,11 +1,8 @@
 //! # amethyst_locale
 //!
 //! Localisation binding a `Fluent` file to an Asset<Locale> via the use of amethyst_assets.
-#![warn(missing_docs)]
 
-extern crate amethyst_assets;
-extern crate amethyst_core;
-extern crate fluent;
+#![warn(missing_docs, rust_2018_idioms, rust_2018_compatibility)]
 
 use fluent::bundle::FluentBundle;
 

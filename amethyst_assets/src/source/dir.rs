@@ -4,7 +4,10 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use {source::Source, ErrorKind, Result, ResultExt};
+#[cfg(feature = "profiler")]
+use thread_profiler::profile_scope;
+
+use crate::{source::Source, ErrorKind, Result, ResultExt};
 
 /// Directory source.
 ///
@@ -42,13 +45,13 @@ impl Source for Directory {
 
         let path = self.path(path);
 
-        Ok(metadata(&path)
+        metadata(&path)
             .chain_err(|| format!("Failed to fetch metadata for {:?}", path))?
             .modified()
             .chain_err(|| "Could not get modification time")?
             .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs())
+            .chain_err(|| "Anomalies with the system clock caused `duration_since` to fail")
+            .map(|d| d.as_secs())
     }
 
     fn load(&self, path: &str) -> Result<Vec<u8>> {
@@ -74,7 +77,7 @@ impl Source for Directory {
 mod test {
     use std::path::Path;
 
-    use source::Source;
+    use crate::source::Source;
 
     use super::Directory;
 

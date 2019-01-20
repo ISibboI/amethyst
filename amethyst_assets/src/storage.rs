@@ -7,7 +7,9 @@ use std::{
 };
 
 use crossbeam::queue::MsQueue;
+use derivative::Derivative;
 use hibitset::BitSet;
+use log::{debug, error, trace, warn};
 use rayon::ThreadPool;
 
 use amethyst_core::{
@@ -18,7 +20,7 @@ use amethyst_core::{
     Time,
 };
 
-use {
+use crate::{
     asset::{Asset, FormatValue},
     error::{Error, ErrorKind, Result, ResultExt},
     progress::Tracker,
@@ -46,7 +48,7 @@ pub struct AssetStorage<A: Asset> {
     handles: Vec<Handle<A>>,
     handle_alloc: Allocator,
     pub(crate) processed: Arc<MsQueue<Processed<A>>>,
-    reloads: Vec<(WeakHandle<A>, Box<Reload<A>>)>,
+    reloads: Vec<(WeakHandle<A>, Box<dyn Reload<A>>)>,
     unused_handles: MsQueue<Handle<A>>,
     requeue: Mutex<Vec<Processed<A>>>,
 }
@@ -154,7 +156,10 @@ impl<A: Asset> AssetStorage<A> {
         F: FnMut(A::Data) -> Result<ProcessingState<A>>,
     {
         {
-            let requeue = self.requeue.get_mut().unwrap();
+            let requeue = self
+                .requeue
+                .get_mut()
+                .expect("The mutex of `requeue` in `AssetStorage` was poisoned");
             while let Some(processed) = self.processed.try_pop() {
                 let assets = &mut self.assets;
                 let bitset = &mut self.bitset;
@@ -352,7 +357,7 @@ impl<A: Asset> AssetStorage<A> {
             .iter()
             .position(|&(_, ref rel)| rel.needs_reload())
         {
-            let (handle, rel): (WeakHandle<_>, Box<Reload<_>>) = self.reloads.swap_remove(p);
+            let (handle, rel): (WeakHandle<_>, Box<dyn Reload<_>>) = self.reloads.swap_remove(p);
 
             let name = rel.name();
             let format = rel.format();
@@ -502,13 +507,13 @@ pub(crate) enum Processed<A: Asset> {
         data: Result<FormatValue<A>>,
         handle: Handle<A>,
         name: String,
-        tracker: Box<Tracker>,
+        tracker: Box<dyn Tracker>,
     },
     HotReload {
         data: Result<FormatValue<A>>,
         handle: Handle<A>,
         name: String,
-        old_reload: Box<Reload<A>>,
+        old_reload: Box<dyn Reload<A>>,
     },
 }
 

@@ -1,11 +1,13 @@
 use std::result::Result as StdResult;
 
+use error_chain::bail;
 use gfx::{
     format::{ChannelType, SurfaceType, SurfaceTyped},
     texture::SamplerInfo,
     traits::Pod,
 };
 use image::{DynamicImage, ImageFormat, RgbaImage};
+use serde::{Deserialize, Serialize};
 
 use amethyst_assets::{
     AssetStorage, Format, Handle, Loader, PrefabData, PrefabError, ProcessingState,
@@ -13,7 +15,7 @@ use amethyst_assets::{
 };
 use amethyst_core::specs::prelude::{Entity, Read, ReadExpect};
 
-use {
+use crate::{
     tex::{FilterMethod, Texture, TextureBuilder},
     types::SurfaceFormat,
     Renderer,
@@ -364,6 +366,7 @@ impl SimpleFormat<Texture> for BmpFormat {
 }
 
 /// Allows loading of TGA files.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TgaFormat;
 
 impl TgaFormat {
@@ -451,11 +454,17 @@ where
     D: AsRef<[T]>,
     T: Pod + Copy,
 {
-    tb.with_sampler(metadata.sampler)
+    let builder = tb
+        .with_sampler(metadata.sampler)
         .mip_levels(metadata.mip_levels)
         .dynamic(metadata.dynamic)
         .with_format(metadata.format)
-        .with_channel_type(metadata.channel)
+        .with_channel_type(metadata.channel);
+    if let Some((x, y)) = metadata.size {
+        builder.with_size(x, y)
+    } else {
+        builder
+    }
 }
 
 fn create_texture_asset_from_image(
@@ -518,7 +527,7 @@ impl SimpleFormat<Texture> for TextureFormat {
 }
 
 mod serde_helper {
-    use tex::{FilterMethod, WrapMode};
+    use crate::tex::{FilterMethod, WrapMode};
 
     use super::SamplerInfo;
 

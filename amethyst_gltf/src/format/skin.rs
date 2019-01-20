@@ -1,19 +1,17 @@
 use std::collections::HashMap;
 
-use gltf;
-use GltfPrefab;
-
-use {
+use crate::{
     animation::{JointPrefab, SkinPrefab, SkinnablePrefab},
     assets::Prefab,
-    core::cgmath::{Matrix4, SquareMatrix},
+    core::nalgebra::Matrix4,
     renderer::JointTransformsPrefab,
+    GltfPrefab,
 };
 
 use super::{Buffers, GltfError};
 
 pub fn load_skin(
-    skin: &gltf::Skin,
+    skin: &gltf::Skin<'_>,
     buffers: &Buffers,
     skin_entity: usize,
     node_map: &HashMap<usize, usize>,
@@ -22,7 +20,11 @@ pub fn load_skin(
 ) -> Result<(), GltfError> {
     let joints = skin
         .joints()
-        .map(|j| node_map.get(&j.index()).cloned().unwrap())
+        .map(|j| {
+            node_map.get(&j.index()).cloned().expect(
+                "Unreachable: `node_map` is initialized with the indexes from the `Gltf` object",
+            )
+        })
         .collect::<Vec<_>>();
 
     let reader = skin.reader(|buffer| buffers.buffer(&buffer));

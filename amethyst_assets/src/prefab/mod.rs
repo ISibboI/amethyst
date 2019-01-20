@@ -1,10 +1,13 @@
 use std::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+use shred_derive::SystemData;
+
 use amethyst_core::specs::prelude::{
     Component, DenseVecStorage, Entity, FlaggedStorage, Read, ReadExpect, SystemData, WriteStorage,
 };
 
-use {Asset, AssetStorage, Format, Handle, Loader, Progress, ProgressCounter};
+use crate::{Asset, AssetStorage, Format, Handle, Loader, Progress, ProgressCounter};
 
 pub use self::system::PrefabLoaderSystem;
 pub use amethyst_core::specs::error::Error as PrefabError;
@@ -247,9 +250,11 @@ impl<T> Prefab<T> {
     ///
     /// ### Panics
     ///
-    /// If sub asset loading have not been triggered
+    /// If sub asset loading has not been triggered.
     pub fn progress(&self) -> &ProgressCounter {
-        self.counter.as_ref().unwrap()
+        self.counter
+            .as_ref()
+            .expect("Sub asset loading has not been triggered")
     }
 
     /// Trigger sub asset loading for the asset
@@ -446,7 +451,7 @@ mod tests {
         GlobalTransform, Time, Transform,
     };
 
-    use Loader;
+    use crate::Loader;
 
     use super::*;
 
@@ -475,11 +480,9 @@ mod tests {
             Some(&Transform::default()),
             world.read_storage().get(root_entity)
         );
-        assert!(
-            world
-                .read_storage::<GlobalTransform>()
-                .get(root_entity)
-                .is_some()
-        );
+        assert!(world
+            .read_storage::<GlobalTransform>()
+            .get(root_entity)
+            .is_some());
     }
 }

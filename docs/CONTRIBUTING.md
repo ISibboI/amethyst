@@ -179,7 +179,7 @@ $ git merge --ff-only --no-commit upstream
 Then you can decide to do a FF rebase. This way, our commit logs remain nice
 and clean, and we'll be grateful.
 
-[di]: https://discord.gg/GnP5Whs
+[di]: https://discord.gg/amethyst
 [rb]: https://github.com/edx/edx-platform/wiki/How-to-Rebase-a-Pull-Request#how-do-i-rebase
 
 Thank you so much for your contribution! Now Amethyst will be a little bit
@@ -189,8 +189,10 @@ faster, stronger, and more efficient.
 
 Documentation improvements are always welcome! A solid project needs to have
 solid documentation to go with it. You can search for documentation-related
-issues on any of our GitHub trackers by filtering by the orange `note: doc`
+issues on any of our GitHub trackers by filtering by the green [`projects: docs`][pd]
 label.
+
+[pd]: https://github.com/amethyst/amethyst/issues?q=is%3Aopen+is%3Aissue+label%3A"project%3A+docs"
 
 There are two types of documentation in Amethyst you can work on:
 
@@ -256,7 +258,7 @@ Then you can hit load button and choose `thread_profile.json` file.
 ## Useful Resources
 
 * Amethyst
-  * [Amethyst Gitter][gi] - The Amethyst project's public chat room.
+  * [Amethyst Discord][di] - The Amethyst project's public chat room.
 * Design Inspiration
   * [Bitsquid: Behind The Scenes (2013)][bs]
   * [Flexible Rendering for Multiple Platforms (2012)][fr]
@@ -269,6 +271,7 @@ Then you can hit load button and choose `thread_profile.json` file.
     code samples.
   * [The Rust Programming Language][rl] - The canonical online book about Rust.
 
+[di]: https://discord.gg/amethyst
 [bs]: https://www.kth.se/social/upload/5289cb3ff276542440dd668c/bitsquid-behind-the-scenes.pdf
 [fr]: http://twvideo01.ubm-us.net/o1/vault/gdc2012/slides/Programming%20Track/Persson_Tobias_Flexible_Rendering.pdf.pdf
 [ma]: http://www.amd.com/Documents/Mantle-Programming-Guide-and-API-Reference.pdf

@@ -1,9 +1,9 @@
 use amethyst_core::{
-    cgmath::Point3,
+    nalgebra::Point3,
     specs::{prelude::Component, storage::HashMapStorage},
 };
 
-use output::Output;
+use crate::output::Output;
 
 /// An audio listener, add this component to the local player character.
 #[derive(Debug)]

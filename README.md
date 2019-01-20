@@ -1,4 +1,4 @@
-<img align="left" width="64px" src="book/src/images/amethyst_thumb.png" />
+<img align="left" width="64px" src="book/src/images/amethyst_emblem.png" />
 
 # Amethyst
 
@@ -14,7 +14,7 @@
 [tc]: https://travis-ci.org/amethyst/amethyst/
 [ci]: https://crates.io/crates/amethyst/
 [li]: COPYING
-[di]: https://discord.gg/GnP5Whs
+[di]: https://discord.gg/amethyst
 
 ## What is Amethyst?
 
@@ -26,7 +26,7 @@ configurable as possible.
 These principles are what make Amethyst unique and competitive in the world of game engines.
 
 * Massively parallel architecture.
-* Powered by a correct [Entity Component System][ecs] model.
+* Powered by a correct [Entity Component System][ECS] model.
 * Rapid prototyping with [RON][ron] files for prefabs and an abstract scripting API.
 * Strong focus on encouraging reusability and clean interfaces.
 
@@ -37,7 +37,7 @@ These principles are what make Amethyst unique and competitive in the world of g
 
 ### Extreme Multithreading
 
-Amethyst is based over a very powerful parallel [ecs] called specs.
+Amethyst is based over a very powerful parallel [ECS][ecs] called Specs.
 This allows games built with Amethyst to maximize the processing power usage to make it run as smooth and as fast as possible, without the headache of multithread programming.
 
 ### Clean
@@ -45,12 +45,12 @@ This allows games built with Amethyst to maximize the processing power usage to 
 By design, the amethyst engine encourages you to write clean and reusable code for your behaviours and data structures, allowing engine users to easily
 share useful components, thus reducing development time and cost.
 
-Using the [ecs] architecture, the code of games can be cleanly divided between data and behaviour, making it easy to understand what is going on,
+Using the [ECS][ecs] architecture, the code of games can be cleanly divided between data and behaviour, making it easy to understand what is going on,
 even if the game is running on a massive 64 cores processor.
 
 ### Community
 
-While we may not be feature-packed (yet!), we all strongly believe that the community-oriented side of amethyst will thrive as we move forward!
+While we may not be feature-packed (yet!), we all strongly believe that the community-oriented side of Amethyst will thrive as we move forward!
 
 ## Features
 
@@ -58,13 +58,23 @@ Please visit the [features page][feat] for a list of features Amethyst provides.
 
 [feat]: docs/FEATURES.md
 
+## Navigation
+
+* [**Link to the book (latest release)**][bkr]
+* [**Link to the book (master)**][bkm]
+* [**Link to the examples (latest release)**][exr]
+* [**Link to the examples (master)**][exm]
+
+[bkr]: https://www.amethyst.rs/book/latest/
+[bkm]: https://www.amethyst.rs/book/master/
+[exr]: https://github.com/amethyst/amethyst/tree/v0.9.0/examples
+[exm]: https://github.com/amethyst/amethyst/tree/master/examples
+
 ## Usage
 
-While the engine can be hard to use at times, we made a lot of [documentation][bk] that will teach you everything you need to use amethyst comfortably!
+While the engine can be hard to use at times, we made a lot of [documentation][bkr] that will teach you everything you need to use Amethyst comfortably!
 
-If you don't understand a part of the documentation, please let us know. Join us on discord or open an issue, we are always happy to help!
-
-[bk]: https://www.amethyst.rs/book/latest/
+If you don't understand a part of the documentation, please let us know. Join us on Discord or open an issue, we are always happy to help!
 
 ## Getting started
 
@@ -74,7 +84,7 @@ To compile any of the examples run:
 $ cargo run --example name_of_example
 ```
 
-All available examples are listed under [examples][ex].
+All available examples are listed under [examples][exr].
 
 Our most advanced example is currently called pong. It is a pong game, as you may have guessed it.
 
@@ -88,7 +98,6 @@ While we create this list, feel free to join our discord and ask about which pro
 For a full-blown "Hello World" tutorial check out the [Getting Started][gs] chapter
 in the book.
 
-[ex]: examples/
 [gs]: https://www.amethyst.rs/book/latest/
 
 ## Dependencies
@@ -113,7 +122,7 @@ $ sudo dnf install alsa-lib-devel openssl-devel cmake freetype-devel expat-devel
 
 See your distribution specific installation process for the equivalent dependencies.
 
-Please note that you need to have a functionnal graphics driver installed.
+Please note that you need to have a functional graphics driver installed.
 If you get a panic about the renderer unable to create the context when trying to run an example,
 faulty driver installation can be the issue.
 
@@ -154,7 +163,7 @@ If you have a question, feel free to ask on our [Discord server][di] and we'll h
 Other places you may want to check out are [r/rust_gamedev][rg] and [#rust-gamedev IRC][irc].
 
 [faq]: https://github.com/amethyst/amethyst/wiki/Frequently-Asked-Questions
-[di]: https://discord.gg/GnP5Whs
+[di]: https://discord.gg/amethyst
 [rg]: https://www.reddit.com/r/rust_gamedev/
 [irc]: https://botbot.me/mozilla/rust-gamedev/
 
@@ -177,9 +186,23 @@ If for some reason we don't have any open PR or good first issues (that would be
 you can look through the [issue tracker][it].
 
 [cm]: docs/CONTRIBUTING.md
-[pr]: https://github.com/amethyst/amethyst/projects
+[pr]: https://github.com/amethyst/amethyst/pulls
 [it]: https://github.com/amethyst/amethyst/issues
 [gfi]: https://github.com/amethyst/amethyst/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+
+## Backers
+
+Thank you to all our backers! 🙏 [Become a backer](https://www.amethyst-engine.org/donate)
+
+<a href="https://opencollective.com/amethyst#backers" target="_blank"><img src="https://opencollective.com/amethyst/backers.svg?width=890"></a>
+
+## Sponsors
+Amethyst is supported by:
+<p>
+  <a href="https://www.digitalocean.com?utm_medium=opensource&utm_source=amethyst/">
+    <img src="https://opensource.nyc3.cdn.digitaloceanspaces.com/attribution/assets/SVG/DO_Logo_horizontal_blue.svg" width="201px">
+  </a>
+</p>
 
 ## License
 
